@@ -1,6 +1,6 @@
 package lab3.auctions.actors
 
-import akka.actor.{Actor, ActorPath, ActorRef}
+import akka.actor.{Actor, ActorPath, ActorRef, Props}
 import akka.event.LoggingReceive
 
 import scala.collection.mutable
@@ -10,9 +10,11 @@ import scala.util.Random
 
 object Buyer {
   case class Buy(shoppingList: List[String])
+
+  def props(searchPath: ActorPath, maxBid: BigInt): Props = Props(new Buyer(searchPath, maxBid))
 }
 
-class Buyer(searchPath: ActorPath) extends Actor {
+class Buyer(searchPath: ActorPath, maxBid: BigInt) extends Actor {
   import lab3.auctions.actors.Buyer._
 
   var shopping = new ArrayBuffer[String]()
@@ -29,18 +31,33 @@ class Buyer(searchPath: ActorPath) extends Actor {
       shopping -= query
       // we take first result in the basic solution
       val auction = results.head
-      val bid = new Random().nextInt(20) + 1
-      auction ! Bid(bid, self)
+      val bid = new Random().nextInt(maxBid.intValue() - 1) + 1
+      auction ! Auction.Bid(bid, self)
       activeAuctions += auction -> bid
     case Auction.BidSuccess(auction) =>
-      println(s"Bid success: $self -> $sender")
+      println(s"Bid success: ${self.path.name} -> ${auction.path.name} (bid: ${activeAuctions(auction)})")
     case Auction.BidFailed(auction) =>
-      println(s"Bid failed: $self -> $sender")
-      val newBid = new Random().nextInt(20) + 1
-      auction ! Bid(activeAuctions(auction) + newBid, self)
-      activeAuctions(auction) = newBid
+      println(s"Bid failed: ${self.path.name} -> ${auction.path.name} (bid: ${activeAuctions(auction)})")
+      val newBid = activeAuctions(auction) + 1
+      if (newBid <= maxBid) {
+        auction ! Auction.Bid(newBid, self)
+        activeAuctions(auction) = newBid
+      } else {
+        println(s"Resigning from bidding for: ${self.path.name} -> ${auction.path.name} ($newBid exceeds max bid $maxBid)")
+        activeAuctions -= auction
+      }
     case Auction.Win(auction) =>
-      println(s"Won auction: $self -> $auction")
+      println(s"Won auction: ${self.path.name} -> ${auction.path.name} (bid: ${activeAuctions(auction)})")
       activeAuctions -= auction
+    case Auction.BidRaised(auction) =>
+      println(s"Bid raised for: ${self.path.name} -> ${auction.path.name}")
+      val newBid = activeAuctions(auction) + 2
+      if (newBid <= maxBid) {
+        auction ! Auction.Bid(newBid, self)
+        activeAuctions(auction) = newBid
+      } else {
+        println(s"Resigning from bidding for: ${self.path.name} -> ${auction.path.name} ($newBid exceeds max bid $maxBid)")
+        activeAuctions -= auction
+      }
   }
 }

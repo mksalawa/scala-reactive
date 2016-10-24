@@ -33,7 +33,7 @@ class Seller(searchPath: ActorPath, bidTime: FiniteDuration, deleteTime: FiniteD
         Thread sleep 100
       }
     case AuctionData(title, currBid, currBuyer) =>
-      println(s"Auction: $title sold to $currBuyer for $currBid")
+      println(s"Auction: $title sold to ${currBuyer.path.name} for $currBid")
       currBuyer ! Win(sender)
       auctions -= title
   }

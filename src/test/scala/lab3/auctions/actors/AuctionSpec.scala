@@ -14,6 +14,7 @@ class AuctionSpec extends TestKit(ActorSystem("AuctionSpec"))
   }
 
   "Auction" must {
+    import lab3.auctions.actors.Auction.Bid
 
     "accept any proper first bid" in {
       val auction = TestActorRef(Props(new Auction("a1", 1 second, 1 second)))
@@ -64,6 +65,18 @@ class AuctionSpec extends TestKit(ActorSystem("AuctionSpec"))
       auction ! Bid(2, buyerProbe.ref)
       buyerProbe.expectMsg(Auction.BidSuccess(auction))
       sellerProbe.expectMsg(1300 millis, AuctionData("a1", 2, buyerProbe.ref))
+    }
+
+    "notify buyer about raising their bid" in {
+      val auction = TestActorRef(Props(new Auction("a1", 500 millis, 500 millis)))
+      val buyerProbe1 = TestProbe()
+      val buyerProbe2 = TestProbe()
+      auction ! Bid(2, buyerProbe1.ref)
+      buyerProbe1.expectMsg(Auction.BidSuccess(auction))
+
+      auction ! Bid(3, buyerProbe2.ref)
+      buyerProbe2.expectMsg(Auction.BidSuccess(auction))
+      buyerProbe1.expectMsg(Auction.BidRaised(auction))
     }
   }
 }

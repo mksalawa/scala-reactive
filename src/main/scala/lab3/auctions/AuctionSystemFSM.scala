@@ -29,7 +29,7 @@ class AuctionSystem() extends Actor {
   val buyers: ArrayBuffer[ActorRef] = {
     val bs = new ArrayBuffer[ActorRef]()
     (1 to 3).foreach(i => {
-      bs += context.actorOf(Props(new Buyer(search.path)), s"buyer$i")
+      bs += context.actorOf(Buyer.props(search.path, 20), s"buyer$i")
     })
     bs
   }
@@ -37,7 +37,7 @@ class AuctionSystem() extends Actor {
   val sellers: ArrayBuffer[ActorRef] = {
     val ss = new ArrayBuffer[ActorRef]()
     sellersMap.foreach { case (seller, auctions) =>
-      val s = context.actorOf(Seller.props(search.path, 5 seconds, 5 seconds), seller)
+      val s = context.actorOf(Seller.props(search.path, 2 seconds, 2 seconds), seller)
       s ! Seller.CreateAuctions(auctions)
     }
     ss

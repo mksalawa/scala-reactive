@@ -1,25 +1,28 @@
 package lab3.auctions.actors
 
 import akka.actor.{Actor, ActorRef, FSM, Props}
+
 import scala.concurrent.duration.FiniteDuration
 
 
 object Auction {
   case class BidSuccess(auction: ActorRef)
   case class BidFailed(auction: ActorRef)
+  case class BidRaised(auction: ActorRef)
   case class Win(auction: ActorRef)
+  case class Subscribe(listener: ActorRef)
+  case class Bid(amount: BigInt, buyer: ActorRef) {
+    require(amount > 0)
+  }
 
   def props(title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
     Props(new Auction(title, bidTime, deleteTime))
 }
 
 class Auction(title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends Actor with FSM[State, Data] {
+  import lab3.auctions.actors.Auction._
 
   startWith(Created, AuctionData(title, 0, null))
-
-  case object BidTimeExpired
-
-  case object DeleteTimeExpired
 
   when(Created, stateTimeout = bidTime) {
     case Event(Bid(amount, buyer), data) =>
@@ -41,6 +44,7 @@ class Auction(title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration
   when(Activated, stateTimeout = bidTime) {
     case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer)) if amount > currAmount =>
       buyer ! Auction.BidSuccess(self)
+      currBuyer ! BidRaised(self)
       stay using AuctionData(t, amount, buyer)
     case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer)) =>
       buyer ! Auction.BidFailed(self)
@@ -71,6 +75,3 @@ case object Expired extends State
 // Data that may be retained within FSM
 sealed trait Data
 case class AuctionData(title: String, currentBid: BigInt, currentBuyer: ActorRef) extends Data
-case class Bid(amount: BigInt, buyer: ActorRef) extends Data {
-  require(amount > 0)
-}

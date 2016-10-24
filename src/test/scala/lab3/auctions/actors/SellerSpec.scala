@@ -1,8 +1,9 @@
 package lab3.auctions.actors
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestActorRef, TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+
 import scala.concurrent.duration._
 
 
@@ -38,7 +39,7 @@ class SellerSpec extends TestKit(ActorSystem("SellerSpec"))
 
       search.expectMsgPF() {
         case AuctionSearch.Register(a1Ref, "a1") =>
-          a1Ref ! Bid(100, buyerProbe.ref)
+          a1Ref ! Auction.Bid(100, buyerProbe.ref)
           buyerProbe.expectMsg(Auction.BidSuccess(a1Ref))
           buyerProbe.expectMsg(Auction.Win(a1Ref))
       }

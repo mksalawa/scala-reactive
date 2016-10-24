@@ -21,6 +21,6 @@ class AuctionSearch() extends Actor {
     case Register(auction, title) =>
       auctions += (title -> auction)
     case Search(query) =>
-      sender ! SearchResult(query, auctions.filterKeys(key => key.toLowerCase().contains(query.toLowerCase)).values.toList)
+      sender ! SearchResult(query, auctions.filterKeys(key => key.toLowerCase.contains(query.toLowerCase)).values.toList)
   }
 }
