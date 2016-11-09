@@ -36,7 +36,7 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
     case Event(Bid(amount, buyer), _) =>
       println(s"BID OK! | $title | [state: Created] ${buyer.path.name} | $amount")
       buyer ! Auction.BidSuccess(self)
-      goto(Activated) applying StateChangeEvent(AuctionData(title, amount, buyer, bidTime))
+      goto(Activated) applying StateChangeEvent(AuctionData(title, amount, buyer.path.toStringWithoutAddress, bidTime))
     case Event(StateTimeout, _) =>
       println(s"BID TIMEOUT! | $title | [state: Created]")
       goto(Ignored)
@@ -46,7 +46,7 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
     case Event(Bid(amount, buyer), _) =>
       println(s"BID OK! | $title | [state: Ignored] ${buyer.path.name} | $amount")
       buyer ! Auction.BidSuccess(self)
-      goto(Activated) applying StateChangeEvent(AuctionData(title, amount, buyer, bidTime))
+      goto(Activated) applying StateChangeEvent(AuctionData(title, amount, buyer.path.toStringWithoutAddress, bidTime))
     case Event(StateTimeout, data) =>
       println(s"DELETE TIMEOUT! | $title | [state: Ignored]")
       context.parent ! Expired
@@ -57,8 +57,8 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
     case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, age)) if amount > currAmount =>
       println(s"BID OK! | $title | [state: Activated] ${buyer.path.name} | $amount")
       buyer ! Auction.BidSuccess(self)
-      currBuyer ! BidRaised(self)
-      stay applying StateChangeEvent(AuctionData(t, amount, buyer, age))
+      context.actorSelection(currBuyer) ! BidRaised(self)
+      stay applying StateChangeEvent(AuctionData(t, amount, buyer.path.toStringWithoutAddress, age))
     case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, age)) =>
       println(s"BID TOO LOW! | $title | [state: Activated] ${buyer.path.name} | $amount")
       buyer ! Auction.BidFailed(self)
@@ -85,10 +85,10 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
     val data = event.data
     var buyer = "null"
     if (dataBeforeEvent.currentBuyer != null) {
-      buyer = dataBeforeEvent.currentBuyer.path.name
+      buyer = dataBeforeEvent.currentBuyer
     }
     println(s"CHANGE $title \n\tFROM: ${dataBeforeEvent.currentBid} | $buyer | ${dataBeforeEvent.auctionAge} \n\tTO: " +
-      s"${data.currentBid} | ${data.currentBuyer.path.name} | ${data.auctionAge}")
+      s"${data.currentBid} | ${data.currentBuyer} | ${data.auctionAge}")
     data
   }
 }
@@ -113,4 +113,4 @@ case object Expired extends State {
 
 // Data that may be retained within FSM
 sealed trait Data
-case class AuctionData(title: String, currentBid: BigInt, currentBuyer: ActorRef, auctionAge: FiniteDuration) extends Data
+case class AuctionData(title: String, currentBid: BigInt, currentBuyer: String, auctionAge: FiniteDuration) extends Data

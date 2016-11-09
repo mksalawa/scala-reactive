@@ -1,6 +1,6 @@
 package lab4.auctions.actors
 
-import akka.actor.{Actor, ActorPath, ActorRef, Props}
+import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
 import lab3.auctions.actors.Auction.Win
 
@@ -14,27 +14,27 @@ object Seller {
     require(auctions.nonEmpty)
   }
 
-  def props(searchPath: ActorPath, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
+  def props(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
     Props(new Seller(searchPath, bidTime, deleteTime))
 }
 
-class Seller(searchPath: ActorPath, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends Actor {
+class Seller(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends Actor {
 
   import Seller._
 
-  var auctions = new mutable.HashMap[String, ActorRef]()
+  var auctions = new mutable.HashSet[String]()
 
   def receive = LoggingReceive {
     case CreateAuctions(titles) =>
       titles.zipWithIndex.foreach { case (t, i) =>
         val name: String = "auction_" + t.replace(" ", "_")
         val auction = context.actorOf(Auction.props(name, t, bidTime, deleteTime), name)
-        auctions += t -> auction
+        auctions += t
         context.actorSelection(searchPath) ! AuctionSearch.Register(auction, t)
       }
     case AuctionData(title, currBid, currBuyer, age) =>
-      println(s"SOLD | $title | ${currBuyer.path.name} | $currBid")
-      currBuyer ! Win(sender)
+      println(s"SOLD | $title | $currBuyer | $currBid")
+      context.actorSelection(currBuyer) ! Win(sender)
       auctions -= title
       if (auctions.isEmpty) {
         context.parent ! SellerFinished

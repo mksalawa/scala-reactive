@@ -1,12 +1,12 @@
 package lab4.auctions
 
-import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import akka.event.LoggingReceive
-import lab4.auctions.actors.{Auction, AuctionSearch, Buyer, Seller}
+import lab4.auctions.actors.{AuctionSearch, Buyer, Seller}
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
@@ -34,20 +34,21 @@ class AuctionSystem() extends Actor {
 
   val search = context.actorOf(Props[AuctionSearch], "search")
 
-  val buyers: ArrayBuffer[ActorRef] = {
-    val bs = new ArrayBuffer[ActorRef]()
+  val buyers: ArrayBuffer[String] = {
+    val bs = new ArrayBuffer[String]()
     buyersMap.foreach { case (buyerId, queries) =>
-      bs += context.actorOf(Buyer.props(search.path, 40), s"buyer$buyerId")
+      val b = context.actorOf(Buyer.props(search.path.toStringWithoutAddress, 50), s"buyer$buyerId")
+      bs += b.path.toStringWithoutAddress
     }
     bs
   }
 
-  val sellers: ArrayBuffer[ActorRef] = {
-    val ss = new ArrayBuffer[ActorRef]()
+  val sellers: ArrayBuffer[String] = {
+    val ss = new ArrayBuffer[String]()
     sellersMap.foreach { case (seller, auctions) =>
-      val s = context.actorOf(Seller.props(search.path, 10 seconds, 10 seconds), seller)
+      val s = context.actorOf(Seller.props(search.path.toStringWithoutAddress, 10 seconds, 10 seconds), seller)
       s ! Seller.CreateAuctions(auctions)
-      ss += s
+      ss += s.path.toStringWithoutAddress
     }
     ss
   }
@@ -57,12 +58,12 @@ class AuctionSystem() extends Actor {
       // we need to wait for the auctions to be created...
       Thread sleep 1000
       buyersMap.foreach { case (buyerId, queries) =>
-        buyers(buyerId) ! Buyer.Buy(queries)
+        context.actorSelection(buyers(buyerId)) ! Buyer.Buy(queries)
         Thread sleep 50
       }
     case Seller.SellerFinished =>
       println(s"SELLER FINISHED | ${sender.path.name}")
-      sellers -= sender
+      sellers -= sender.path.toStringWithoutAddress
       if (sellers.isEmpty) {
         println(s"ALL AUCTIONS FINISHED | Terminating system...")
         context.system.terminate()
