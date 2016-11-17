@@ -38,7 +38,7 @@ class Buyer(searchPath: String, maxBid: BigInt) extends Actor {
       val bid = ThreadLocalRandom.current().nextInt(maxBid.intValue() - 1) + 1
       context.actorSelection(auctionPath) ! Auction.Bid(bid, self)
       activeAuctions += auctionPath -> bid
-      Thread sleep 100
+      Thread sleep 500
     case Auction.BidSuccess(auction) =>
       println(s"BID SUCCESS | ${self.path.name} | ${auction.path.name} (bid: ${activeAuctions(getPath(auction))})")
     case Auction.BidFailed(auction) =>
@@ -52,9 +52,9 @@ class Buyer(searchPath: String, maxBid: BigInt) extends Actor {
         println(s"Resigning from bidding | ${self.path.name} | ${auction.path.name} ($newBid exceeds max bid $maxBid)")
         activeAuctions -= getPath(auction)
       }
-      Thread sleep 100
+      Thread sleep 500
     case Auction.Win(auction) =>
-      println(s"WINNER | ${self.path.name} | ${auction.path.name} (bid: ${activeAuctions(getPath(auction))})")
+      println(s"WINNER | ${self.path.name} | ${auction.path.name}")
       activeAuctions -= getPath(auction)
     case Auction.BidRaised(auction) =>
       println(s"BID RAISE | ${self.path.name} | ${auction.path.name}")
@@ -67,7 +67,7 @@ class Buyer(searchPath: String, maxBid: BigInt) extends Actor {
         println(s"Resigning from bidding | ${self.path.name} | ${auction.path.name} ($newBid exceeds max bid $maxBid)")
         activeAuctions -= getPath(auction)
       }
-      Thread sleep 100
+      Thread sleep 500
   }
 
   def getNewBid(auctionPath: String): BigInt = {

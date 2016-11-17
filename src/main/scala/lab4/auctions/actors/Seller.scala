@@ -2,7 +2,7 @@ package lab4.auctions.actors
 
 import akka.actor.{Actor, Props}
 import akka.event.LoggingReceive
-import lab3.auctions.actors.Auction.Win
+import lab4.auctions.actors.Auction.Win
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -36,6 +36,12 @@ class Seller(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDura
       println(s"SOLD | $title | $currBuyer | $currBid")
       context.actorSelection(currBuyer) ! Win(sender)
       auctions -= title
+      if (auctions.isEmpty) {
+        context.parent ! SellerFinished
+      }
+    case Auction.AuctionExpired(AuctionData(t, currBid, currBuyer, timeout)) =>
+      println(s"Expired | $t ")
+      auctions -= t
       if (auctions.isEmpty) {
         context.parent ! SellerFinished
       }

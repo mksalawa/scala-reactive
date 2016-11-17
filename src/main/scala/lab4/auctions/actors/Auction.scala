@@ -14,6 +14,7 @@ object Auction {
   case class BidFailed(auction: ActorRef)
   case class BidRaised(auction: ActorRef)
   case class Win(auction: ActorRef)
+  case class AuctionExpired(auctionData: AuctionData)
   case class Subscribe(listener: ActorRef)
   case class Bid(amount: BigInt, buyer: ActorRef) {
     require(amount > 0)
@@ -27,10 +28,27 @@ object Auction {
 class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends PersistentFSM [State, AuctionData, StateChangeEvent] {
   import lab4.auctions.actors.Auction._
 
+  case object ClockTick
+
   override def persistenceId = id
   override def domainEventClassTag: ClassTag[StateChangeEvent] = classTag[StateChangeEvent]
 
-  startWith(Created, AuctionData(title, 0, null, 0 seconds))
+  private val TICK: FiniteDuration = (1000 millis)
+
+  startWith(Created, AuctionData(title, 0, null, bidTime))
+  setTimer("clock", ClockTick, TICK, repeat = true)
+
+  whenUnhandled {
+    case Event(ClockTick, AuctionData(t, currAmount, currBuyer, timeout)) =>
+//      println(s"=> TICK | $title")
+      val newTimeLeft: FiniteDuration = timeout - TICK
+      if (newTimeLeft <= (0 millis)) {
+        self ! StateTimeout
+        stay applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, deleteTime))
+      } else {
+        stay applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, newTimeLeft))
+      }
+  }
 
   when(Created, stateTimeout = bidTime) {
     case Event(Bid(amount, buyer), _) =>
@@ -49,23 +67,23 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
       goto(Activated) applying StateChangeEvent(AuctionData(title, amount, buyer.path.toStringWithoutAddress, bidTime))
     case Event(StateTimeout, data) =>
       println(s"DELETE TIMEOUT! | $title | [state: Ignored]")
-      context.parent ! Expired
+      context.parent ! AuctionExpired(data)
       goto(Expired)
   }
 
   when(Activated, stateTimeout = bidTime) {
-    case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, age)) if amount > currAmount =>
+    case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, timeout)) if amount > currAmount =>
       println(s"BID OK! | $title | [state: Activated] ${buyer.path.name} | $amount")
       buyer ! Auction.BidSuccess(self)
       context.actorSelection(currBuyer) ! BidRaised(self)
-      stay applying StateChangeEvent(AuctionData(t, amount, buyer.path.toStringWithoutAddress, age))
-    case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, age)) =>
+      stay applying StateChangeEvent(AuctionData(t, amount, buyer.path.toStringWithoutAddress, bidTime))
+    case Event(Bid(amount, buyer), AuctionData(t, currAmount, currBuyer, timeout)) =>
       println(s"BID TOO LOW! | $title | [state: Activated] ${buyer.path.name} | $amount")
       buyer ! Auction.BidFailed(self)
       stay
-    case Event(StateTimeout, AuctionData(t, currAmount, currBuyer, age)) =>
+    case Event(StateTimeout, AuctionData(t, currAmount, currBuyer, timeout)) =>
       println(s"BID TIMEOUT! | $title | [state: Activated]")
-      goto(Sold) applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, age))
+      goto(Sold) applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, bidTime))
   }
 
   when(Sold, stateTimeout = deleteTime) {
@@ -87,8 +105,8 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
     if (dataBeforeEvent.currentBuyer != null) {
       buyer = dataBeforeEvent.currentBuyer
     }
-    println(s"CHANGE $title \n\tFROM: ${dataBeforeEvent.currentBid} | $buyer | ${dataBeforeEvent.auctionAge} \n\tTO: " +
-      s"${data.currentBid} | ${data.currentBuyer} | ${data.auctionAge}")
+    println(s"CHANGE $title \n\tFROM: ${dataBeforeEvent.currentBid} | $buyer | ${dataBeforeEvent.timeout} \n\tTO: " +
+      s"${data.currentBid} | ${data.currentBuyer} | ${data.timeout}")
     data
   }
 }
@@ -113,4 +131,4 @@ case object Expired extends State {
 
 // Data that may be retained within FSM
 sealed trait Data
-case class AuctionData(title: String, currentBid: BigInt, currentBuyer: String, auctionAge: FiniteDuration) extends Data
+case class AuctionData(title: String, currentBid: BigInt, currentBuyer: String, timeout: FiniteDuration) extends Data

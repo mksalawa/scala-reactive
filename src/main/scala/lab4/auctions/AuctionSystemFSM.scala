@@ -19,12 +19,16 @@ class AuctionSystem() extends Actor {
   import AuctionSystem._
 
   private val sellersMap = HashMap[String, List[String]](
+//    "seller1" -> List("Neksus 6 new phone")
+
     "seller1" -> List("Neksus 6 new phone", "Phone case Sansung S34", "MyPhone 7 best price"),
     "seller2" -> List("Proshe 911 2012 350hp", "Gaudi G6 2014 eco", "Thesla 5 2015 electric"),
     "seller3" -> List("Bed sheets floral, various colours", "Pillow 30x30, soft & fluffy")
   )
 
   private val buyersMap = HashMap[Int, List[String]](
+//    0 -> List("Neksus", "Pillow")
+
     0 -> List("Neksus", "Pillow"),
     1 -> List("Proshe", "Neksus", "Gaudi"),
     2 -> List("Proshe", "Pillow", "Bed"),
