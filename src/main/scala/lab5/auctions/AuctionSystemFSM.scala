@@ -50,7 +50,7 @@ class AuctionSystem(publisherPath: String) extends Actor {
   val sellers: ArrayBuffer[String] = {
     val ss = new ArrayBuffer[String]()
     sellersMap.foreach { case (seller, auctions) =>
-      val s = context.actorOf(Seller.props(search.path.toStringWithoutAddress, notifier.path.toStringWithoutAddress, 10 seconds, 10 seconds), seller)
+      val s = context.actorOf(Seller.props(search.path.toStringWithoutAddress, notifier.path.toStringWithoutAddress, 20 seconds, 10 seconds), seller)
       s ! Seller.CreateAuctions(auctions)
       ss += s.path.toStringWithoutAddress
     }
@@ -75,25 +75,13 @@ class AuctionSystem(publisherPath: String) extends Actor {
   }
 }
 
-class AuctionPublisher() extends Actor {
-
-  def receive = LoggingReceive {
-    case AuctionData(t, currBid, currBuyer, timeout) =>
-      // System.err for visible differentiation of logs
-      System.err.println(t + " | " + currBid + " | " + currBuyer + " | " + timeout)
-  }
-}
-
 object AuctionSystemApp extends App {
   val config = ConfigFactory.load()
-
-  val publisherSystem = ActorSystem("AuctionPublisherSystem", config.getConfig("auctionpublisher").withFallback(config))
-  val publisherActor = publisherSystem.actorOf(Props[AuctionPublisher], "auctionPublisherActor")
 
   val auctionSystem = ActorSystem("AuctionSystem", config.getConfig("auctionsystem").withFallback(config))
   val auctionSystemActor = auctionSystem.actorOf(AuctionSystem.props("akka.tcp://AuctionPublisherSystem@127.0.0.1:2553/user/auctionPublisherActor"), "mainActor")
 
   auctionSystemActor ! AuctionSystem.Init
+
   Await.result(auctionSystem.whenTerminated, Duration.Inf)
-  Await.result(publisherSystem.whenTerminated, Duration.Inf)
 }

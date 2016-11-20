@@ -40,7 +40,7 @@ class Buyer(searchPath: String, maxBid: BigInt) extends Actor {
       activeAuctions += auctionPath -> bid
       Thread sleep 500
     case Auction.BidSuccess(auction) =>
-      println(s"BID SUCCESS | ${self.path.name} | ${auction.path.name} (bid: ${activeAuctions(getPath(auction))})")
+      println(s"BID SUCCESS | ${self.path.name} | ${auction.path.name}")
     case Auction.BidFailed(auction) =>
       println(s"BID FAILED | ${self.path.name} | ${auction.path.name} (bid: ${getBid(getPath(auction))})")
       val newBid = getNewBid(getPath(auction))
