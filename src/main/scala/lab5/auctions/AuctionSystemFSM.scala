@@ -2,7 +2,8 @@ package lab5.auctions
 
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.event.LoggingReceive
-import lab5.auctions.actors.{AuctionSearch, Buyer, Seller}
+import com.typesafe.config.ConfigFactory
+import lab5.auctions.actors._
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ArrayBuffer
@@ -12,23 +13,21 @@ import scala.concurrent.duration._
 
 object AuctionSystem {
   case object Init
+
+  def props(publisherPath: String): Props = Props(new AuctionSystem(publisherPath))
 }
 
-class AuctionSystem() extends Actor {
+class AuctionSystem(publisherPath: String) extends Actor {
 
   import AuctionSystem._
 
   private val sellersMap = HashMap[String, List[String]](
-//    "seller1" -> List("Neksus 6 new phone")
-
     "seller1" -> List("Neksus 6 new phone", "Phone case Sansung S34", "MyPhone 7 best price"),
     "seller2" -> List("Proshe 911 2012 350hp", "Gaudi G6 2014 eco", "Thesla 5 2015 electric"),
     "seller3" -> List("Bed sheets floral, various colours", "Pillow 30x30, soft & fluffy")
   )
 
   private val buyersMap = HashMap[Int, List[String]](
-//    0 -> List("Neksus", "Pillow")
-
     0 -> List("Neksus", "Pillow"),
     1 -> List("Proshe", "Neksus", "Gaudi"),
     2 -> List("Proshe", "Pillow", "Bed"),
@@ -37,6 +36,7 @@ class AuctionSystem() extends Actor {
   )
 
   val search = context.actorOf(Props[AuctionSearch], "search")
+  val notifier = context.actorOf(Notifier.props(publisherPath), "notifier")
 
   val buyers: ArrayBuffer[String] = {
     val bs = new ArrayBuffer[String]()
@@ -50,7 +50,7 @@ class AuctionSystem() extends Actor {
   val sellers: ArrayBuffer[String] = {
     val ss = new ArrayBuffer[String]()
     sellersMap.foreach { case (seller, auctions) =>
-      val s = context.actorOf(Seller.props(search.path.toStringWithoutAddress, 10 seconds, 10 seconds), seller)
+      val s = context.actorOf(Seller.props(search.path.toStringWithoutAddress, notifier.path.toStringWithoutAddress, 10 seconds, 10 seconds), seller)
       s ! Seller.CreateAuctions(auctions)
       ss += s.path.toStringWithoutAddress
     }
@@ -75,9 +75,25 @@ class AuctionSystem() extends Actor {
   }
 }
 
+class AuctionPublisher() extends Actor {
+
+  def receive = LoggingReceive {
+    case AuctionData(t, currBid, currBuyer, timeout) =>
+      // System.err for visible differentiation of logs
+      System.err.println(t + " | " + currBid + " | " + currBuyer + " | " + timeout)
+  }
+}
+
 object AuctionSystemApp extends App {
-  val system = ActorSystem("AuctionSystem")
-  val mainActor = system.actorOf(Props[AuctionSystem], "mainActor")
-  mainActor ! AuctionSystem.Init
-  Await.result(system.whenTerminated, Duration.Inf)
+  val config = ConfigFactory.load()
+
+  val publisherSystem = ActorSystem("AuctionPublisherSystem", config.getConfig("auctionpublisher").withFallback(config))
+  val publisherActor = publisherSystem.actorOf(Props[AuctionPublisher], "auctionPublisherActor")
+
+  val auctionSystem = ActorSystem("AuctionSystem", config.getConfig("auctionsystem").withFallback(config))
+  val auctionSystemActor = auctionSystem.actorOf(AuctionSystem.props("akka.tcp://AuctionPublisherSystem@127.0.0.1:2553/user/auctionPublisherActor"), "mainActor")
+
+  auctionSystemActor ! AuctionSystem.Init
+  Await.result(auctionSystem.whenTerminated, Duration.Inf)
+  Await.result(publisherSystem.whenTerminated, Duration.Inf)
 }

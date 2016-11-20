@@ -3,7 +3,7 @@ package lab5.auctions.actors
 import akka.actor.{ActorRef, Props}
 import akka.persistence.fsm.PersistentFSM.FSMState
 import akka.persistence.fsm._
-import lab5.auctions.actors.Auction.StateChangeEvent
+import lab5.auctions.actors.Auction._
 
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.reflect._
@@ -19,19 +19,23 @@ object Auction {
   case class Bid(amount: BigInt, buyer: ActorRef) {
     require(amount > 0)
   }
-  case class StateChangeEvent(data: AuctionData)
 
-  def props(id: String, title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
-    Props(new Auction(id, title, bidTime, deleteTime))
+  sealed trait AuctionEvent
+  case class StateChangeEvent(data: AuctionData) extends AuctionEvent
+  case class TickEvent(timeout: FiniteDuration) extends AuctionEvent
+
+  def props(id: String, title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration, notifierPath: String): Props =
+    Props(new Auction(id, title, bidTime, deleteTime, notifierPath))
 }
 
-class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends PersistentFSM [State, AuctionData, StateChangeEvent] {
-  import lab5.auctions.actors.Auction._
+class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: FiniteDuration, notifierPath: String)
+  extends PersistentFSM [State, AuctionData, AuctionEvent] {
+
 
   case object ClockTick
 
   override def persistenceId = id
-  override def domainEventClassTag: ClassTag[StateChangeEvent] = classTag[StateChangeEvent]
+  override def domainEventClassTag: ClassTag[AuctionEvent] = classTag[AuctionEvent]
 
   private val TICK: FiniteDuration = (1000 millis)
 
@@ -44,9 +48,9 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
       val newTimeLeft: FiniteDuration = timeout - TICK
       if (newTimeLeft <= (0 millis)) {
         self ! StateTimeout
-        stay applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, deleteTime))
+        stay applying TickEvent(deleteTime)
       } else {
-        stay applying StateChangeEvent(AuctionData(t, currAmount, currBuyer, newTimeLeft))
+        stay applying TickEvent(newTimeLeft)
       }
   }
 
@@ -99,15 +103,21 @@ class Auction(id: String, title: String, bidTime: FiniteDuration, deleteTime: Fi
 
   override def onRecoveryCompleted(): Unit = super.onRecoveryCompleted()
 
-  override def applyEvent(event: StateChangeEvent, dataBeforeEvent: AuctionData): AuctionData = {
-    val data = event.data
-    var buyer = "null"
-    if (dataBeforeEvent.currentBuyer != null) {
-      buyer = dataBeforeEvent.currentBuyer
+  override def applyEvent(event: AuctionEvent, dataBeforeEvent: AuctionData): AuctionData = {
+    event match {
+      case stateChangeEvent: StateChangeEvent =>
+        val data = stateChangeEvent.data
+        var buyer = "null"
+        if (dataBeforeEvent.currentBuyer != null) {
+          buyer = dataBeforeEvent.currentBuyer
+        }
+        context.actorSelection(notifierPath) ! Notifier.Notify(data)
+        println(s"CHANGE $title \n\tFROM: ${dataBeforeEvent.currentBid} | $buyer | ${dataBeforeEvent.timeout} \n\tTO: " +
+          s"${data.currentBid} | ${data.currentBuyer} | ${data.timeout}")
+        data
+      case clockTickEvent: TickEvent =>
+        AuctionData(dataBeforeEvent.title, dataBeforeEvent.currentBid, dataBeforeEvent.currentBuyer, clockTickEvent.timeout)
     }
-    println(s"CHANGE $title \n\tFROM: ${dataBeforeEvent.currentBid} | $buyer | ${dataBeforeEvent.timeout} \n\tTO: " +
-      s"${data.currentBid} | ${data.currentBuyer} | ${data.timeout}")
-    data
   }
 }
 

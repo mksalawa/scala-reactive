@@ -14,11 +14,11 @@ object Seller {
     require(auctions.nonEmpty)
   }
 
-  def props(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
-    Props(new Seller(searchPath, bidTime, deleteTime))
+  def props(searchPath: String, notifierPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration): Props =
+    Props(new Seller(searchPath, notifierPath, bidTime, deleteTime))
 }
 
-class Seller(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends Actor {
+class Seller(searchPath: String, notifierPath: String, bidTime: FiniteDuration, deleteTime: FiniteDuration) extends Actor {
 
   import Seller._
 
@@ -28,7 +28,7 @@ class Seller(searchPath: String, bidTime: FiniteDuration, deleteTime: FiniteDura
     case CreateAuctions(titles) =>
       titles.zipWithIndex.foreach { case (t, i) =>
         val name: String = "auction_" + t.replace(" ", "_")
-        val auction = context.actorOf(Auction.props(name, t, bidTime, deleteTime), name)
+        val auction = context.actorOf(Auction.props(name, t, bidTime, deleteTime, notifierPath), name)
         auctions += t
         context.actorSelection(searchPath) ! AuctionSearch.Register(auction, t)
       }
