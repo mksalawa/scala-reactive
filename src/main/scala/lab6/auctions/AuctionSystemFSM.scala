@@ -20,10 +20,10 @@ object AuctionSystem {
 
   case object Init
 
-  def props(publisherPath: String): Props = Props(new AuctionSystem(publisherPath))
+  def props(publisherPath: String, searchInstsCount: Int): Props = Props(new AuctionSystem(publisherPath, searchInstsCount))
 }
 
-class AuctionSystem(publisherPath: String) extends Actor {
+class AuctionSystem(publisherPath: String, searchInstsCount: Int) extends Actor {
 
   import AuctionSystem._
 
@@ -41,7 +41,7 @@ class AuctionSystem(publisherPath: String) extends Actor {
     4 -> List("Sansung", "MyPhone", "Thesla")
   )
 
-  val search = context.actorOf(Props[AuctionSearch], "search")
+  val search = context.actorOf(MasterSearch.props(searchInstsCount), "search")
   val notifier = context.actorOf(Notifier.props(publisherPath), "notifier")
 
   val buyers: ArrayBuffer[String] = {
@@ -85,9 +85,10 @@ class AuctionSystem(publisherPath: String) extends Actor {
 object AuctionSystemApp extends App {
   val config = ConfigFactory.load()
 
+  val searchInstsCount = 5
   val publisherPath = "akka.tcp://%s@%s/user/%s".format(AuctionPublisher.SYSTEM, AuctionPublisher.HOSTPORT, AuctionPublisher.ACTOR)
   val auctionSystem = ActorSystem(AuctionSystem.SYSTEM, config.getConfig(AuctionSystem.CONFIG).withFallback(config))
-  val auctionSystemActor = auctionSystem.actorOf(AuctionSystem.props(publisherPath), AuctionSystem.ACTOR)
+  val auctionSystemActor = auctionSystem.actorOf(AuctionSystem.props(publisherPath, searchInstsCount), AuctionSystem.ACTOR)
 
   auctionSystemActor ! AuctionSystem.Init
 
